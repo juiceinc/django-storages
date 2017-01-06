@@ -269,6 +269,7 @@ class S3BotoStorage(Storage):
         self._entries = {}
         self._bucket = None
         self._connection = None
+        self.security_token = None
 
         if not self.access_key and not self.secret_key:
             self.access_key, self.secret_key, self.security_token = self._get_access_keys()
@@ -322,7 +323,8 @@ class S3BotoStorage(Storage):
                     return value
         access_key = self.access_key or lookup_env(self.access_key_names)
         secret_key = self.secret_key or lookup_env(self.secret_key_names)
-        return access_key, secret_key
+        security_token = self.security_token or lookup_env(self.security_token_names)
+        return access_key, secret_key, security_token
 
     def _get_or_create_bucket(self, name):
         """
