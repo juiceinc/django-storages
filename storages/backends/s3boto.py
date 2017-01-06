@@ -205,9 +205,11 @@ class S3BotoStorage(Storage):
     # used for looking up the access and secret key from env vars
     access_key_names = ['AWS_S3_ACCESS_KEY_ID', 'AWS_ACCESS_KEY_ID']
     secret_key_names = ['AWS_S3_SECRET_ACCESS_KEY', 'AWS_SECRET_ACCESS_KEY']
+    security_token_names = ['AWS_S3_SECURITY_TOKEN', 'AWS_SECURITY_TOKEN']
 
     access_key = setting('AWS_S3_ACCESS_KEY_ID', setting('AWS_ACCESS_KEY_ID'))
     secret_key = setting('AWS_S3_SECRET_ACCESS_KEY', setting('AWS_SECRET_ACCESS_KEY'))
+    security_token = setting('AWS_SECURITY_TOKEN', setting('AWS_SECURITY_TOKEN'))
     file_overwrite = setting('AWS_S3_FILE_OVERWRITE', True)
     headers = setting('AWS_HEADERS', {})
     bucket_name = setting('AWS_STORAGE_BUCKET_NAME')
@@ -269,7 +271,7 @@ class S3BotoStorage(Storage):
         self._connection = None
 
         if not self.access_key and not self.secret_key:
-            self.access_key, self.secret_key = self._get_access_keys()
+            self.access_key, self.secret_key, self.security_token = self._get_access_keys()
 
     @property
     def connection(self):
@@ -277,6 +279,7 @@ class S3BotoStorage(Storage):
             self._connection = self.connection_class(
                 self.access_key,
                 self.secret_key,
+                security_token=self.security_token,
                 is_secure=self.use_ssl,
                 calling_format=self.calling_format,
                 host=self.host,

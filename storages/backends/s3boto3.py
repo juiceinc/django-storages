@@ -210,9 +210,11 @@ class S3Boto3Storage(Storage):
     # used for looking up the access and secret key from env vars
     access_key_names = ['AWS_S3_ACCESS_KEY_ID', 'AWS_ACCESS_KEY_ID']
     secret_key_names = ['AWS_S3_SECRET_ACCESS_KEY', 'AWS_SECRET_ACCESS_KEY']
+    security_token_names = ['AWS_S3_SECURITY_TOKEN', 'AWS_SECURITY_TOKEN']
 
     access_key = setting('AWS_S3_ACCESS_KEY_ID', setting('AWS_ACCESS_KEY_ID'))
     secret_key = setting('AWS_S3_SECRET_ACCESS_KEY', setting('AWS_SECRET_ACCESS_KEY'))
+    security_token = setting('AWS_SECURITY_TOKEN', setting('AWS_SECURITY_TOKEN'))
     file_overwrite = setting('AWS_S3_FILE_OVERWRITE', True)
     object_parameters = setting('AWS_S3_OBJECT_PARAMETERS', {})
     bucket_name = setting('AWS_STORAGE_BUCKET_NAME')
@@ -272,7 +274,7 @@ class S3Boto3Storage(Storage):
         self._connection = None
 
         if not self.access_key and not self.secret_key:
-            self.access_key, self.secret_key = self._get_access_keys()
+            self.access_key, self.secret_key, self.security_token = self._get_access_keys()
 
         if not self.config:
             self.config = Config(s3={'addressing_style': self.addressing_style},
@@ -289,6 +291,7 @@ class S3Boto3Storage(Storage):
                 self.connection_service_name,
                 aws_access_key_id=self.access_key,
                 aws_secret_access_key=self.secret_key,
+                security_token=self.security_token,
                 region_name=self.region_name,
                 use_ssl=self.use_ssl,
                 endpoint_url=self.endpoint_url,
@@ -329,7 +332,8 @@ class S3Boto3Storage(Storage):
                     return value
         access_key = self.access_key or lookup_env(self.access_key_names)
         secret_key = self.secret_key or lookup_env(self.secret_key_names)
-        return access_key, secret_key
+        security_token = self.security_token or lookup_env(self.security_token_names) or None
+        return access_key, secret_key, security_token
 
     def _get_or_create_bucket(self, name):
         """
