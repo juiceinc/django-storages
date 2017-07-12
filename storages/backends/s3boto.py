@@ -332,8 +332,7 @@ class S3BotoStorage(Storage):
                     return value
         access_key = self.access_key or lookup_env(self.access_key_names)
         secret_key = self.secret_key or lookup_env(self.secret_key_names)
-        security_token = self.security_token or lookup_env(self.security_token_names)
-        return access_key, secret_key, security_token
+        return access_key, secret_key
 
     def _get_security_token(self):
         security_token = self._lookup_env(self.security_token_names)
