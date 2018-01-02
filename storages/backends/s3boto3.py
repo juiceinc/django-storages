@@ -1,6 +1,7 @@
 import mimetypes
 import os
 import posixpath
+import threading
 from gzip import GzipFile
 from tempfile import SpooledTemporaryFile
 
@@ -236,7 +237,7 @@ class S3Boto3Storage(Storage):
 
         self._entries = {}
         self._bucket = None
-        self._connection = None
+        self._connections = threading.local()
 
         self.security_token = None
         if not self.access_key and not self.secret_key:
@@ -253,9 +254,10 @@ class S3Boto3Storage(Storage):
         # Note that proxies are handled by environment variables that the underlying
         # urllib/requests libraries read. See https://github.com/boto/boto3/issues/338
         # and http://docs.python-requests.org/en/latest/user/advanced/#proxies
-        if self._connection is None:
+        connection = getattr(self._connections, 'connection', None)
+        if connection is None:
             session = boto3.session.Session()
-            self._connection = session.resource(
+            self._connections.connection = session.resource(
                 's3',
                 aws_access_key_id=self.access_key,
                 aws_secret_access_key=self.secret_key,
@@ -265,7 +267,7 @@ class S3Boto3Storage(Storage):
                 endpoint_url=self.endpoint_url,
                 config=self.config
             )
-        return self._connection
+        return self._connections.connection
 
     @property
     def bucket(self):
@@ -385,8 +387,13 @@ class S3Boto3Storage(Storage):
 
     def _compress_content(self, content):
         """Gzip a given string content."""
+        content.seek(0)
         zbuf = BytesIO()
-        zfile = GzipFile(mode='wb', compresslevel=6, fileobj=zbuf)
+        #  The GZIP header has a modification time attribute (see http://www.zlib.org/rfc-gzip.html)
+        #  This means each time a file is compressed it changes even if the other contents don't change
+        #  For S3 this defeats detection of changes using MD5 sums on gzipped files
+        #  Fixing the mtime at 0.0 at compression time avoids this problem
+        zfile = GzipFile(mode='wb', compresslevel=6, fileobj=zbuf, mtime=0.0)
         try:
             zfile.write(force_bytes(content.read()))
         finally:
@@ -429,6 +436,18 @@ class S3Boto3Storage(Storage):
         obj = self.bucket.Object(encoded_name)
         if self.preload_metadata:
             self._entries[encoded_name] = obj
+
+        # If both `name` and `content.name` are empty or None, your request
+        # can be rejected with `XAmzContentSHA256Mismatch` error, because in
+        # `django.core.files.storage.Storage.save` method your file-like object
+        # will be wrapped in `django.core.files.File` if no `chunks` method
+        # provided. `File.__bool__`  method is Django-specific and depends on
+        # file name, for this reason`botocore.handlers.calculate_md5` can fail
+        # even if wrapped file-like object exists. To avoid Django-specific
+        # logic, pass internal file-like object if `content` is `File`
+        # class instance.
+        if isinstance(content, File):
+            content = content.file
 
         self._save_content(obj, content, parameters=parameters)
         # Note: In boto3, after a put, last_modified is automatically reloaded
@@ -487,7 +506,7 @@ class S3Boto3Storage(Storage):
         if self.entries:
             entry = self.entries.get(name)
             if entry:
-                return entry.content_length
+                return entry.size if hasattr(entry, 'size') else entry.content_length
             return 0
         return self.bucket.Object(self._encode_name(name)).content_length
 
